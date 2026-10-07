@@ -93,7 +93,7 @@ uint8_t DIP_Read(void)
      * OFF = 0
      */
 
-    return ((~PINC) & DIP_MASK);
+    return ((~PINC) & DIP_MASK); // to read the hole port 
 }
 
 
@@ -103,6 +103,10 @@ uint8_t DIP_Read(void)
 
 uint8_t DIP_To_Temperature(void)
 {
+    uint8_t dip;
+	dip = DIP_READ();
+	return (dip + 15); // to make a representation for the temperature 
+	// to control the min & max
 
 }
 
