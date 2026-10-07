@@ -85,7 +85,21 @@ uint8_t spi_state = SPI_WAIT_START;
 
 void Load_Settings(void)
 {
-    
+    uint8_t magic;
+	
+	magic = EEPROM_Read( EEPROM_MAGIC_ADDR);
+
+	min_temp = DEFAULT_MIN_TEMP;
+
+	max_temp = DEFAULT_MAX_TEMP;
+
+	EEPROM_Write(EEPROM_MIN_ADDR , min_temp);
+
+	EEPROM_Write(EEPROM_MAX_ADDR , max_temp);
+
+	EEPROM_Write(EEPROM_MAGIC_ADDR , EEPROM_MAGIC);
+
+	
 }
 
 
@@ -98,12 +112,28 @@ void Greenhouse_Control(uint8_t temperature)
     /* -----------------------------------------------------
        Heater
        ----------------------------------------------------- */
+       if(temperature < min_temp){
 
+		   SET_BIT(PORTB , HEATER_PIN);
+	   }
+
+	else if (temperature >= (min_temp + HYSTERESIS )){
+
+		CLR_BIT(PORTB , HEATER_PIN);
+	}
 
     /* -----------------------------------------------------
        Fan
        ----------------------------------------------------- */
+        if(temperature >  max_temp){
 
+		   SET_BIT(PORTB , FAN_PIN);
+	   }
+
+	else if (temperature <= (max_temp - HYSTERESIS )){
+
+		CLR_BIT(PORTB , FAN_PIN);
+	}
 }
 
 
