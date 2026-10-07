@@ -1,0 +1,493 @@
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdint.h>
+
+#include "UART.h"
+#include "SPI.h"
+#include "I2C.h"
+#include "EEPROM.h"
+#include "hal_temp.h"
+#include "LCD.h"
+
+
+/* =====================================================
+   EEPROM ADDRESSES
+   ===================================================== */
+
+#define EEPROM_MIN_ADDR   0
+#define EEPROM_MAX_ADDR   1
+
+
+/* =====================================================
+   DEFAULT SETTINGS
+   ===================================================== */
+
+#define DEFAULT_MIN       20
+#define DEFAULT_MAX       30
+
+#define HYSTERESIS        1
+#define HIGH_TEMP         35
+
+
+/* =====================================================
+   OUTPUT PINS
+   CHANGE THESE ACCORDING TO YOUR PROTEUS
+   ===================================================== */
+
+#define HEATER_PIN        PD4
+#define FAN_PIN           PD5
+#define WARNING_LED       PD6
+#define BUZZER_PIN        PD7
+
+
+/* =====================================================
+   GLOBAL VARIABLES
+   ===================================================== */
+
+uint8_t min_temp;
+uint8_t max_temp;
+
+uint8_t heater_state = 0;
+uint8_t fan_state = 0;
+
+uint8_t sensor_fail_count = 0;
+
+uint8_t warning_active = 0;
+
+
+/* =====================================================
+   HEATER
+   ===================================================== */
+
+void Heater_ON(void)
+{
+    SET_BIT(PORTD, HEATER_PIN);
+    heater_state = 1;
+}
+
+
+void Heater_OFF(void)
+{
+    CLR_BIT(PORTD, HEATER_PIN);
+    heater_state = 0;
+}
+
+
+/* =====================================================
+   FAN
+   ===================================================== */
+
+void Fan_ON(void)
+{
+    SET_BIT(PORTD, FAN_PIN);
+    fan_state = 1;
+}
+
+
+void Fan_OFF(void)
+{
+    CLR_BIT(PORTD, FAN_PIN);
+    fan_state = 0;
+}
+
+
+/* =====================================================
+   WARNING
+   ===================================================== */
+
+void Warning_ON(void)
+{
+    SET_BIT(PORTD, WARNING_LED);
+}
+
+
+void Warning_OFF(void)
+{
+    CLR_BIT(PORTD, WARNING_LED);
+}
+
+
+void Buzzer_Beep(void)
+{
+    SET_BIT(PORTD, BUZZER_PIN);
+
+    _delay_ms(500);
+
+    CLR_BIT(PORTD, BUZZER_PIN);
+}
+
+
+/* =====================================================
+   LOAD SETTINGS
+   ===================================================== */
+
+void Load_Settings(void)
+{
+    min_temp = EEPROM_Read(EEPROM_MIN_ADDR);
+    max_temp = EEPROM_Read(EEPROM_MAX_ADDR);
+
+
+    /* EEPROM empty */
+    if (min_temp == 0xFF)
+    {
+        min_temp = DEFAULT_MIN;
+
+        EEPROM_Write(
+            EEPROM_MIN_ADDR,
+            min_temp
+        );
+    }
+
+
+    if (max_temp == 0xFF)
+    {
+        max_temp = DEFAULT_MAX;
+
+        EEPROM_Write(
+            EEPROM_MAX_ADDR,
+            max_temp
+        );
+    }
+}
+
+
+/* =====================================================
+   UART COMMAND
+   ===================================================== */
+
+void UART_Task(void)
+{
+    static char command[20];
+    static uint8_t index = 0;
+
+    char c;
+
+    /*
+     * Check if data arrived
+     * without blocking the program
+     */
+
+    if (UCSR0A & (1 << RXC0))
+    {
+        c = UDR0;
+
+
+        if (c == '\r' || c == '\n')
+        {
+            command[index] = '\0';
+
+
+            /* =========================
+               SETMIN
+               ========================= */
+
+            if (command[0] == 'S' &&
+                command[1] == 'E' &&
+                command[2] == 'T' &&
+                command[3] == 'M' &&
+                command[4] == 'I' &&
+                command[5] == 'N')
+            {
+                uint8_t value;
+
+                value =
+                    (command[7] - '0') * 10 +
+                    (command[8] - '0');
+
+
+                min_temp = value;
+
+                EEPROM_Write(
+                    EEPROM_MIN_ADDR,
+                    min_temp
+                );
+            }
+
+
+            /* =========================
+               SETMAX
+               ========================= */
+
+            else if (command[0] == 'S' &&
+                     command[1] == 'E' &&
+                     command[2] == 'T' &&
+                     command[3] == 'M' &&
+                     command[4] == 'A' &&
+                     command[5] == 'X')
+            {
+                uint8_t value;
+
+                value =
+                    (command[7] - '0') * 10 +
+                    (command[8] - '0');
+
+
+                max_temp = value;
+
+                EEPROM_Write(
+                    EEPROM_MAX_ADDR,
+                    max_temp
+                );
+            }
+
+
+            index = 0;
+        }
+
+        else
+        {
+            if (index < 19)
+            {
+                command[index] = c;
+                index++;
+            }
+        }
+    }
+}
+
+
+/* =====================================================
+   TEMPERATURE CONTROL
+   ===================================================== */
+
+void Temperature_Control(int16_t temperature)
+{
+    /* =========================
+       HEATER
+       ========================= */
+
+    if (temperature < min_temp)
+    {
+        Heater_ON();
+    }
+
+    else if (temperature >=
+             (min_temp + HYSTERESIS))
+    {
+        Heater_OFF();
+    }
+
+
+    /* =========================
+       FAN
+       ========================= */
+
+    if (temperature > max_temp)
+    {
+        Fan_ON();
+    }
+
+    else if (temperature <=
+             (max_temp - HYSTERESIS))
+    {
+        Fan_OFF();
+    }
+}
+
+
+/* =====================================================
+   LCD DISPLAY
+   ===================================================== */
+
+void Display_Temperature(int16_t temperature)
+{
+    LCD_Clear();
+
+    LCD_SetCursor(0, 0);
+
+    LCD_String("Temp:");
+
+    LCD_Number(temperature);
+
+    LCD_String(" C");
+
+
+    LCD_SetCursor(1, 0);
+
+    LCD_String("H:");
+
+    if (heater_state)
+        LCD_String("ON ");
+    else
+        LCD_String("OFF");
+
+
+    LCD_String(" F:");
+
+    if (fan_state)
+        LCD_String("ON");
+    else
+        LCD_String("OFF");
+}
+
+
+/* =====================================================
+   MAIN
+   ===================================================== */
+
+int main(void)
+{
+    int16_t temperature;
+
+
+    /* =========================
+       OUTPUT INIT
+       ========================= */
+
+    DDRD |=
+        (1 << HEATER_PIN) |
+        (1 << FAN_PIN) |
+        (1 << WARNING_LED) |
+        (1 << BUZZER_PIN);
+
+
+    Heater_OFF();
+    Fan_OFF();
+    Warning_OFF();
+
+    CLR_BIT(PORTD, BUZZER_PIN);
+
+
+    /* =========================
+       UART
+       ========================= */
+
+    UART_Init(9600);
+
+
+    /* =========================
+       I2C
+       ========================= */
+
+    I2C_Master_Init();
+
+
+    /* =========================
+       SPI
+       ========================= */
+
+    SPI_Slave_Init();
+
+
+    /* =========================
+       LCD
+       ========================= */
+
+    LCD_Init();
+
+
+    /* =========================
+       EEPROM
+       ========================= */
+
+    Load_Settings();
+
+
+    /* =========================
+       MAIN LOOP
+       ========================= */
+
+    while (1)
+    {
+        /* Receive SETMIN / SETMAX */
+        UART_Task();
+
+
+        /* =========================
+           READ LM75
+           ========================= */
+
+        if (temp_read_x10(&temperature))
+        {
+            /* Sensor OK */
+
+            sensor_fail_count = 0;
+
+            Warning_OFF();
+
+
+            /* =========================
+               NORMAL CONTROL
+               ========================= */
+
+            Temperature_Control(
+                temperature / 10
+            );
+
+
+            /* =========================
+               HIGH TEMPERATURE WARNING
+               ========================= */
+
+            if (temperature > HIGH_TEMP * 10)
+            {
+                if (warning_active == 0)
+                {
+                    warning_active = 1;
+
+                    Warning_ON();
+
+                    Buzzer_Beep();
+                }
+            }
+
+            else
+            {
+                /*
+                 * Warning can happen
+                 * again after temperature
+                 * returns to normal
+                 */
+
+                if (temperature <= HIGH_TEMP * 10)
+                {
+                    warning_active = 0;
+                }
+            }
+
+
+            /* =========================
+               LCD
+               ========================= */
+
+            Display_Temperature(
+                temperature / 10
+            );
+        }
+
+
+        /* =========================
+           SENSOR FAILURE
+           ========================= */
+
+        else
+        {
+            sensor_fail_count++;
+
+
+            if (sensor_fail_count >= 3)
+            {
+                /* Sensor Fault */
+
+                Heater_OFF();
+                Fan_OFF();
+
+                Warning_ON();
+
+
+                LCD_Clear();
+
+                LCD_SetCursor(0, 0);
+                LCD_String("Sensor Fault");
+
+
+                LCD_SetCursor(1, 0);
+                LCD_String("H:OFF F:OFF");
+            }
+        }
+
+        _delay_ms(200);
+    }
+}
