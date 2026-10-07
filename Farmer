@@ -1,0 +1,125 @@
+#define F_CPU 16000000UL
+
+#include <avr/io.h>
+#include <util/delay.h>
+
+#include "UART.h"
+#include "SPI.h"
+
+#define DIP_MASK   0x0F
+
+#define B1  PD2
+#define B2  PD3
+
+int main(void)
+{
+    uint8_t dip;
+    uint8_t temperature;
+
+    /* =========================
+       GPIO INIT
+       ========================= */
+
+    /* DIP PC0 -> PC3 as INPUT */
+    DDRC &= ~(DIP_MASK);
+
+    /* Enable Pull-up for DIP */
+    PORTC |= DIP_MASK;
+
+
+    /* B1 and B2 as INPUT */
+    DDRD &= ~((1 << B1) | (1 << B2));
+
+    /* Enable Pull-up */
+    PORTD |= (1 << B1) | (1 << B2);
+
+
+    /* =========================
+       UART INIT
+       ========================= */
+
+    UART_Init(9600);
+
+
+    /* =========================
+       SPI INIT
+       ========================= */
+
+    SPI_Master_Init();
+
+
+    while (1)
+    {
+        /* Read DIP */
+        dip = PINC & DIP_MASK;
+
+        /* Convert:
+           0000 -> 15
+           0001 -> 16
+           ...
+           1111 -> 30
+        */
+
+        temperature = dip + 15;
+
+
+        /* =========================
+           B1 -> SET MIN
+           ========================= */
+
+        if (GET_BIT(PIND, B1) == 0)
+        {
+            UART_SendString("SETMIN ");
+
+            UART_SendChar((temperature / 10) + '0');
+            UART_SendChar((temperature % 10) + '0');
+
+            UART_SendString("\r\n");
+
+            _delay_ms(300);
+        }
+
+
+        /* =========================
+           B2 -> SET MAX
+           ========================= */
+
+        if (GET_BIT(PIND, B2) == 0)
+        {
+            UART_SendString("SETMAX ");
+
+            UART_SendChar((temperature / 10) + '0');
+            UART_SendChar((temperature % 10) + '0');
+
+            UART_SendString("\r\n");
+
+            _delay_ms(300);
+        }
+
+
+        /* =========================
+           SPI PANEL STATUS
+           ========================= */
+
+        /* SS LOW */
+        CLR_BIT(PORTB, PB2);
+
+        /* Header */
+        SPI_Transive(0xAA);
+
+        /* DIP value */
+        SPI_Transive(dip);
+
+        /* B1 status */
+        SPI_Transive(GET_BIT(PIND, B1));
+
+        /* B2 status */
+        SPI_Transive(GET_BIT(PIND, B2));
+
+        /* SS HIGH */
+        SET_BIT(PORTB, PB2);
+
+
+        _delay_ms(100);
+    }
+}
