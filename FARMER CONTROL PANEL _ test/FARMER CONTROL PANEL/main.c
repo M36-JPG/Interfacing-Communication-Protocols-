@@ -171,6 +171,7 @@ uint8_t B2_Read(void)
 
 void Send_SetMin(uint8_t temperature)
 {
+	UART_SendString("");
     UART_SendChar(20);
 }
 
@@ -191,7 +192,16 @@ void Send_SetMax(uint8_t temperature)
 
 void SPI_Send_Panel(void)
 {
-    
+    uint8_t dip ;
+	uint8_t b1 ;
+	uint8_t b2 ;
+
+	dip = DIP_To_Temperature();
+
+	b1 =  B1_Read();
+
+	b2 =  B2_Read();
+	
 }
 
 
@@ -207,7 +217,6 @@ int main(void)
     /* =====================================================
        Initialization
        ===================================================== */
-       LCD_Init();
 	   UART_Init(9600);
 	   SPI_voidMaster_Init();
 	   I2C_Master_Init();
