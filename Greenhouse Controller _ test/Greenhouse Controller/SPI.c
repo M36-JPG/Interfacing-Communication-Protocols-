@@ -91,7 +91,7 @@ void SPI_voidSlave_Init(void)
 void SPI_u8Transceive(uint8_t data)
 {
    SPDR = data ;
-   while(GET_BIT(SPCR , 7));
+   while(GET_BIT(SPSR , 7));
 }
 
 
@@ -101,6 +101,6 @@ void SPI_u8Transceive(uint8_t data)
 
 u8 SPI_u8Receive(void)
 {
-    while(GET_BIT(SPCR , 7));
+    while(GET_BIT(SPSR , 7));
 	return SPDR;
 }
