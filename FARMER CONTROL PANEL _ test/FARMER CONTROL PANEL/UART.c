@@ -3,11 +3,13 @@
 #include "uart.h"
 
 #define F_CPU 1000000UL
+#define baud 9600
 #include <util/delay.h>
 
 void UART_Init(uint32_t baudrate)
 {
 	//baud rate 
+  baudrate = ((F_CPU /(16 * baud))-1);
   UBRR0H = (u8)(baudrate >> 8);
   UBRR0L = (u8)baudrate;
   
@@ -42,8 +44,10 @@ void UART_SendChar(char data)
 
 void UART_SendString(const char *str)
 {
-   while(GET_BIT(UCSR0A , 5));
-   UART_SendChar(*str);
+  while(*str != '\0'){
+	  UART_SendChar(*str);
+	  str++;
+  }
 }
 
 char UART_ReceiveChar(void)
