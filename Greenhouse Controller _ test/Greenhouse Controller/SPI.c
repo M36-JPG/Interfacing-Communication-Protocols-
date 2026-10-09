@@ -18,6 +18,7 @@ void SPI_voidMaster_Init(void)
 	
 	CLR_BIT(DDRB , SPI_MISO); 
 	
+	SET_BIT(PORTB , SPI_SS);
 	SET_BIT(DDRB , SPI_SS);
 	
 	SET_BIT(DDRB , SPI_SCK);
@@ -91,7 +92,8 @@ void SPI_voidSlave_Init(void)
 void SPI_u8Transceive(uint8_t data)
 {
    SPDR = data ;
-   while(GET_BIT(SPSR , 7));
+   while(!GET_BIT(SPSR , 7));
+   return data;
 }
 
 
@@ -101,6 +103,6 @@ void SPI_u8Transceive(uint8_t data)
 
 u8 SPI_u8Receive(void)
 {
-    while(GET_BIT(SPSR , 7));
+    while(!GET_BIT(SPSR , 7));
 	return SPDR;
 }
