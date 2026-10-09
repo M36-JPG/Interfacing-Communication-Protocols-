@@ -9,7 +9,7 @@
 void UART_Init(uint32_t baudrate)
 {
 	//baud rate 
-  baudrate = ((F_CPU /(16 * baud))-1);
+	baudrate = ((F_CPU /(16 * baud))-1);
   UBRR0H = (u8)(baudrate >> 8);
   UBRR0L = (u8)baudrate;
   
@@ -38,7 +38,7 @@ void UART_Init(uint32_t baudrate)
 
 void UART_SendChar(char data)
 {
-   while(GET_BIT(UCSR0A , 5));
+   while(!GET_BIT(UCSR0A , 5));
    UDR0 = data ;
 }
 
@@ -52,7 +52,7 @@ void UART_SendString(const char *str)
 
 char UART_ReceiveChar(void)
 {
-	while(GET_BIT(UCSR0A , 7));
+	while(!GET_BIT(UCSR0A , 7));
 	return UDR0;
 }
 
@@ -64,9 +64,9 @@ void UART_SendHex(uint8_t data)
 	UART_SendChar(hex[data & 0x0F]);
 }
 
-void UART_ReceiveString(char buff , u8 max)     //read full line until enter
+void UART_ReceiveString(char* buff , u8 max)     //read full line until enter
 {
-	u8 i ; int data ;  
+	u8 i = 0 ; char data ;  
 	while (i < max -1 ){
 		data =	UART_ReceiveChar();
 		if (data == -1){
