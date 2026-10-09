@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <util/delay.h>
 
+#include "BIT_MATH.h"
+
 #include "UART.h"
 #include "SPI.h"
 
@@ -25,7 +27,6 @@
  * DIP = 1111 -> 30 C
  */
 
-
 /* =========================================================
    Buttons
    ========================================================= */
@@ -39,7 +40,7 @@
    ========================================================= */
 
 #define SPI_START      0xAA
-
+#define SS_PIN         PB2
 
 /* =========================================================
    DIP Initialization
@@ -104,7 +105,7 @@ uint8_t DIP_Read(void)
 uint8_t DIP_To_Temperature(void)
 {
     uint8_t dip;
-	dip = DIP_READ();
+	dip = DIP_Read();
 	return (dip + 15); // to make a representation for the temperature 
 	// to control the min & max
 
@@ -171,8 +172,10 @@ uint8_t B2_Read(void)
 
 void Send_SetMin(uint8_t temperature)
 {
-	UART_SendString("");
-    UART_SendChar(20);
+	UART_SendString("Set Min ");
+	UART_SendChar((temperature / 10) + '0');
+	UART_SendChar((temperature % 10) + '0');
+	UART_SendString("\r\n"); 
 }
 
 
@@ -182,7 +185,10 @@ void Send_SetMin(uint8_t temperature)
 
 void Send_SetMax(uint8_t temperature)
 {
-     UART_SendChar(30);
+	 UART_SendString("Set Max ");
+	 UART_SendChar((temperature / 10) + '0');
+	 UART_SendChar((temperature % 10) + '0');
+	 UART_SendString("\r\n"); 
 }
 
 
@@ -190,17 +196,16 @@ void Send_SetMax(uint8_t temperature)
    Send SPI Panel Frame
    ========================================================= */
 
-void SPI_Send_Panel(void)
+void SPI_Send_Panel(uint8_t dip , uint8_t b1 , uint8_t b2)
 {
-    uint8_t dip ;
-	uint8_t b1 ;
-	uint8_t b2 ;
-
-	dip = DIP_To_Temperature();
-
-	b1 =  B1_Read();
-
-	b2 =  B2_Read();
+    CLR_BIT(PORTB , SS_PIN );
+	
+	SPI_u8Transceive(SPI_START);
+	SPI_u8Transceive(dip);
+	SPI_u8Transceive(b1);
+	SPI_u8Transceive(b2);
+	
+	SET_BIT(PORTB , SS_PIN);
 	
 }
 
@@ -210,7 +215,10 @@ void SPI_Send_Panel(void)
    ========================================================= */
 
 int main(void)
-{
+{ 
+	uint8_t dip , temperature , b1 , b2 ;
+	
+	uint8_t prev_b1 = 1 , prev_b2 = 1;
     
 
 
@@ -219,7 +227,8 @@ int main(void)
        ===================================================== */
 	   UART_Init(9600);
 	   SPI_voidMaster_Init();
-	   I2C_Master_Init();
+	   DIP_Init();
+	   Buttons_Init();
 	   
    
 
@@ -233,36 +242,53 @@ int main(void)
         /* =================================================
            Read Buttons
            ================================================= */
-
+         dip = DIP_Read();
+		 temperature = DIP_To_Temperature();
+		 b1 = B1_Read();
+		 b2 = B2_Read();
 
 
         /* =================================================
            Read Temperature From DIP
            ================================================= */
-
+           
         
 
 
         /* =================================================
            B1 ? SETMIN
            ================================================= */
-
+           if(b1 == 0 && prev_b1 == 1){
+			   _delay_ms(20);
+			   if(B1_Read() == 0){
+			     Send_SetMin(temperature);
+			   }
+		   }
 
         /* =================================================
            B2 ? SETMAX
            ================================================= */
-
+           
+		   if(b2 == 0 && prev_b2 == 1){
+			   _delay_ms(20);
+			   if(B2_Read() == 0){
+				   Send_SetMax(temperature);
+			   }
+		   }
+		   
         /* =================================================
            SPI Panel Status
            ================================================= */
-
-   
+           
+		    SPI_Send_Panel(dip , b1 , b2);
+           _delay_ms(100);
 
 
         /* =================================================
            Save Button State
            ================================================= */
-
+           prev_b1 = b1;
+		   prev_b2 = b2;
 	}
 
     return 0;
