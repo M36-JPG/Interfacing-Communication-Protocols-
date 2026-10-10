@@ -66,18 +66,24 @@ void UART_SendHex(uint8_t data)
 
 void UART_ReceiveString(char* buff , u8 max)     //read full line until enter
 {
-	u8 i = 0 ; char data ;  
-	while (i < max -1 ){
-		data =	UART_ReceiveChar();
-		if (data == -1){
-			continue;
-		}
-		if(data == '\n' || data == '\r'){ break;}
-			buff[i]==(char) data;
-			i++;
-	}
-	buff[i]='\0';
+	 static u8 i = 0;
+	 char data ; 
+	 if(!UART_DataAvailable()){
+		 return;
+	 }
+	 
+	 data = UDR0;
+	 
+	 if(data == '\n' || data == '\r' || i >= max -1){
+		 buff[i] = '\0';
+		 i = 0;
+	 }
+	 else {
+		 buff[i] = data ;
+		 i++;
+	 }
 }
+
 uint8_t UART_DataAvailable(void)
 {
 	return (UCSR0A & (1 << RXC0));
