@@ -14,7 +14,7 @@
 
 void SPI_voidMaster_Init(void)
 {
-	SET_BIT(DDRB , SPI_MISO); //output 
+	SET_BIT(DDRB , SPI_MOSI); //output 
 	
 	CLR_BIT(DDRB , SPI_MISO); 
 	
