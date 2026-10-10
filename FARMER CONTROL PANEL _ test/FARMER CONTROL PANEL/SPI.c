@@ -81,7 +81,8 @@ void SPI_voidSlave_Init(void)
  
 
     /* SPI Enable - Slave Mode */
-    SPCR = (1 << SPE);
+        SET_BIT(SPCR , SPE);
+
 }
 
 
