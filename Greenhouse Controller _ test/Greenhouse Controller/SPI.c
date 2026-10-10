@@ -81,7 +81,7 @@ void SPI_voidSlave_Init(void)
  
 
     /* SPI Enable - Slave Mode */
-    SPCR = (1 << SPE);
+   SET_BIT(SPCR , SPE);
 }
 
 
@@ -89,7 +89,7 @@ void SPI_voidSlave_Init(void)
    SEND
    ========================================= */
 
-void SPI_u8Transceive(uint8_t data)
+u8 SPI_u8Transceive(uint8_t data)
 {
    SPDR = data ;
    while(!GET_BIT(SPSR , 7));
