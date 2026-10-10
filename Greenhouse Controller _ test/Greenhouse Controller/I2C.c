@@ -131,6 +131,8 @@ uint8_t I2C_Send_SLA_R(uint8_t address)
 uint8_t I2C_Write(uint8_t data)
 {
      TWDR = data ;
+	 TWCR = (1 << TWINT) |
+           (1 << TWEN);
 	 while(!(TWCR & (1 << TWINT)));
 	 return TWDR;
 	 
