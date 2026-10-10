@@ -13,7 +13,7 @@
 void I2C_Master_Init(void)
 {
    TWBR = 0x00;
-   TWBR = (F_CPU / SCL_FREQ ) - 16 / 2;
+   TWBR = ((F_CPU / SCL_FREQ - 16) / 2);
    TWCR = (1<<TWEN);
    
 }
