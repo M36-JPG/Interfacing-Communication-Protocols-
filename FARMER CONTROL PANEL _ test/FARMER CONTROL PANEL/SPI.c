@@ -43,7 +43,7 @@ void SPI_voidMaster_Init(void)
 	
 	
      /* SPI Enable - Master Mode */
-     SPCR = (1 << SPE);
+     SET_BIT(SPCR , SPE);
 }
 
 
