@@ -14,7 +14,7 @@ void EEPROM_Write(uint16_t address, uint8_t data)      //0b0000 0  1  1  0 1111 
 	I2C_Start_condition();
 
 	/* SLA + W */
-	I2C_Send_SLA_W(0b01010000|(address>>8));    //0b00000  1  1  0
+	I2C_Send_SLA_W(EEPROM_ADDRESS);       //0b00000  1  1  0
 	                                            //0b01010  0  0  0          |
                                                           
 	/* EEPROM memory address */
