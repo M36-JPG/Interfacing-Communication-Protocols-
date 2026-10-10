@@ -26,7 +26,7 @@ void UART_Init(uint32_t baudrate)
   CLR_BIT(UCSR0C , 4);
   
   // 1 stop bit 
-  CLR_BIT(UCSR0C , 4);
+  CLR_BIT(UCSR0C , 3);
   
   // 8 data bit 
   SET_BIT(UCSR0C , 2);
