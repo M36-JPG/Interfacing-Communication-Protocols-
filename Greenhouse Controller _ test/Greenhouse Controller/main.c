@@ -10,6 +10,7 @@
 #include "EEPROM.h"
 #include "UART.h"
 #include "SPI.h"
+#include "BIT_MATH.h"
 
 
 /* =========================================================
@@ -83,25 +84,20 @@ uint8_t spi_state = SPI_WAIT_START;
    Load Settings From EEPROM
    ========================================================= */
 
-void Load_Settings(void)
+void EEPROM_init(void)
 {
-    uint8_t magic;
-	
-	magic = EEPROM_Read( EEPROM_MAGIC_ADDR);
+	min_temp = EEPROM_Read(EEPROM_MIN_ADDR);
+	max_temp = EEPROM_Read(EEPROM_MAX_ADDR);
 
-	min_temp = DEFAULT_MIN_TEMP;
+	if (min_temp == 0xFF || max_temp == 0xFF)
+	{
+		min_temp = DEFAULT_MIN_TEMP;
+		max_temp = DEFAULT_MAX_TEMP;
 
-	max_temp = DEFAULT_MAX_TEMP;
-
-	EEPROM_Write(EEPROM_MIN_ADDR , min_temp);
-
-	EEPROM_Write(EEPROM_MAX_ADDR , max_temp);
-
-	EEPROM_Write(EEPROM_MAGIC_ADDR , EEPROM_MAGIC);
-
-	
+		EEPROM_Write(EEPROM_MIN_ADDR, min_temp);
+		EEPROM_Write(EEPROM_MAX_ADDR, max_temp);
+	}
 }
-
 
 /* =========================================================
    Greenhouse Control
@@ -112,27 +108,23 @@ void Greenhouse_Control(uint8_t temperature)
     /* -----------------------------------------------------
        Heater
        ----------------------------------------------------- */
-       if(temperature < min_temp){
-
-		   SET_BIT(PORTB , HEATER_PIN);
-	   }
-
-	else if (temperature >= (min_temp + HYSTERESIS )){
-
-		CLR_BIT(PORTB , HEATER_PIN);
+	if(temperature < min_temp){
+		SET_BIT(DDRB, PB0);
+		SET_BIT(DDRD,PD5);
+	}
+	else if (temperature >= min_temp + HYSTERESIS){
+		CLR_BIT(DDRB , HEATER_PIN);
 	}
 
     /* -----------------------------------------------------
        Fan
        ----------------------------------------------------- */
-        if(temperature >  max_temp){
-
-		   SET_BIT(PORTB , FAN_PIN);
-	   }
-
-	else if (temperature <= (max_temp - HYSTERESIS )){
-
-		CLR_BIT(PORTB , FAN_PIN);
+	if(temperature > max_temp){
+		SET_BIT(DDRB,PB1);
+		SET_BIT(DDRD,PD5);
+	}
+	else if (temperature <=  max_temp - HYSTERESIS){
+		CLR_BIT(DDRB , FAN_PIN);
 	}
 }
 
@@ -143,9 +135,13 @@ void Greenhouse_Control(uint8_t temperature)
 
 uint8_t Read_Temperature(uint8_t *temperature)
 {
-   
-         
-  
+	uint8_t data;
+
+	data = LM75_ReadTemperature();
+
+	*temperature = data;
+
+	return temperature;
 }
 
 
@@ -155,109 +151,73 @@ uint8_t Read_Temperature(uint8_t *temperature)
 
 void High_Temperature_Warning(uint8_t temperature)
 {
-    
+   SET_BIT(DDRB,PB1);
+    SET_BIT(PORTD, PD5); // buzzer
+
+ 	SET_BIT(PORTB,FAN_PIN);
+	CLR_BIT(PORTB,HEATER_PIN);
+	LCD_SetCursor(1,0);
+	LCD_String("FAN_ON , _HEATER_OFF");
+ 
 }
 
+void YELLOW_Temperature_Warning(uint8_t temperature)
+{
+	
+	SET_BIT(PORTD, PD4); // yellow
+LCD_SetCursor(1,0);
+LCD_String("FAN_OFF , _HEATER_OFF");
+	
+}
 
 /* =========================================================
    UART Command Parser
    ========================================================= */
 
-void Parse_Command(char *data)
+void Parse_Command(char data)
 {
-   
-
-    /* -----------------------------------------------------
-       SETMIN 20
-       ----------------------------------------------------- */
-
-
-
-    /* -----------------------------------------------------
-       SETMAX 30
-       ----------------------------------------------------- */
-
+	if (data == 'M')
+	{
+		min_temp = EEPROM_Read(EEPROM_MIN_ADDR);
+	}
+	else if (data == 'X')
+	{
+		max_temp = EEPROM_Read(EEPROM_MAX_ADDR);
+	}
 }
-
-/* =========================================================
-   SPI Receive Panel Frame
-   ========================================================= */
-
-void SPI_Receive_Panel(void)
-{
-    
-    /*
-     * Check if SPI transfer is complete
-     */
-
-  
-        /*
-         * Read received byte.
-         * This clears the SPI flag.
-         */
-
-      
-
-
-      
-            /* =============================================
-               Waiting for START
-               ============================================= */
-
-           
-            /* =============================================
-               Receive DIP
-               ============================================= */
-
-          
-
-            /* =============================================
-               Receive B1
-               ============================================= */
-
-           
-
-            /* =============================================
-               Receive B2
-               ============================================= */
-
-           
-           
-
-          
-}
-
-
 /* =========================================================
    Display Temperature
    ========================================================= */
 
 void Display_Temperature(uint8_t temperature)
 {
-    LCD_Clear();
 
 
     /* -----------------------------------------------------
        Line 1  temp = 17c
-	 
        ----------------------------------------------------- */
-    LCD_SetCursor(0 , 0);
-	LCD_String("TEMP : ");
-	LCD_SetCursor(0 , 2);
-	LCD_Number(17);
-	LCD_Char('C');
-	
-
-
+	LCD_Clear();
+	LCD_SetCursor(0,0);
+	LCD_String("TEMP:");
+	LCD_Number(temperature);
     /* -----------------------------------------------------
        Line 2
 	   fan off heater off buzzer off
        ----------------------------------------------------- */
-
-   
+	LCD_SetCursor(1,0);
+	LCD_String("HEATER OFF BUZZER OFF FAN OFF");
 
 }
 
+void LOW_Temperature_Warning()
+{
+	SET_BIT(DDRB,PB0);
+		SET_BIT(PORTD, PD5); // buzzer
+		SET_BIT(PORTB,PB0); //heaterPORTD
+		CLR_BIT(PORTB,FAN_PIN);
+		LCD_SetCursor(1,0);
+			LCD_String("FAOFF , _hR_ON");
+}
 
 /* =========================================================
    MAIN
@@ -265,74 +225,46 @@ void Display_Temperature(uint8_t temperature)
 
 int main(void)
 {
-   
+	uint8_t temperature;
 
-    /* =====================================================
-       GPIO Initialization
-       ===================================================== */
+	/* GPIO Initialization */
+	SET_BIT(DDRB, HEATER_PIN);
+	SET_BIT(DDRB, FAN_PIN);
+	SET_BIT(DDRD, WARNING_LED_PIN);
+	SET_BIT(DDRD, BUZZER_PIN);
 
-    /* Heater */
-    
+	/* Initialize Drivers */
+	UART_Init(9600);
+	SPI_voidMaster_Init();
+	I2C_Master_Init();
+	LCD_Init();
 
-
-    /* Fan */
-
-
-
-    /* Warning LED */
-
-
-
-    /* Buzzer */
-
-
-
-    /* =====================================================
-       Initial Outputs OFF
-       ===================================================== */
-
-    
-
-    /* =====================================================
-       Driver Initialization
-       ===================================================== */
-        LCD_Init();
-        UART_Init(9600);
-        SPI_voidMaster_Init();
-        I2C_Master_Init();
-        
-
-
-    /* =====================================================
-       Load EEPROM Settings
-       ===================================================== */
-
-  
-
-    /* =====================================================
-       Main Loop
-       ===================================================== */
-
-    while (1)
-    {
-        /* =============================================
-           1. SPI Panel
-           ============================================= */
-
-
-
-        /* =============================================
-           2. Temperature
-           ============================================= */
-
-       
-
-        /* =============================================
-           3. UART
-           ============================================= */
+	/* Load Temperature Settings */
+		
+		
+	while (1)
+	{
+		LCD_SetCursor(0,0);
+		LCD_String("TEMP:");
+		LCD_SetCursor(0,6);
+		LCD_Number(LM75_ReadTemperature());
+		_delay_ms(500);
+		LCD_Clear();
+		if(Read_Temperature(LM75_ReadTemperature()) <= 20)
+		{
+			LOW_Temperature_Warning(LM75_ReadTemperature());
+		}
+		if(Read_Temperature(LM75_ReadTemperature()) >= 30)
+		{
+			High_Temperature_Warning(LM75_ReadTemperature());
+		}
+		if(Read_Temperature(LM75_ReadTemperature())  >=20 &&  Read_Temperature(LM75_ReadTemperature()) <=30)
+		{
+			YELLOW_Temperature_Warning( LM75_ReadTemperature());
+		}
+		
+		
+		
 	}
-        
-
-
-    return 0;
+	return 0; // HEATER PB0 FAN PB1
 }
